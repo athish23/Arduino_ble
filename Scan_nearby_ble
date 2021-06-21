@@ -1,0 +1,111 @@
+#include <SoftwareSerial.h>                 //Serial monitor library
+SoftwareSerial BTserial(10,11);             //RX & TX pin declaration
+
+
+char c=' ';                        //Variable to store ble address received from hc-05
+void delayAndRead()                         //function to read data(address) from HC-05
+{
+   delay(50);
+   while(BTserial.available())             //Checks if there is any data from HC-05 using TX&RX pins
+        {                                  //Returns 1 for true and 0 for false
+         c=BTserial.read();                //Reads the address supplies by HC-05
+        }
+    delay(500);
+}
+
+
+void scandevice()                          //function to execute AT command for scanning ble
+{   BTserial.println("AT+CMODE=1");        // Enable connect to any device
+    delayAndRead();
+    BTserial.println("AT+ROLE=1");         // Set to master in order to enable scanning
+    delayAndRead();
+    BTserial.println("AT+INQM=1,10,1");    //RSSI, Max 10 devices, ~3s
+    delayAndRead();
+    BTserial.println("AT+CLASS=0");        // Disable COD filter
+    delayAndRead();
+    BTserial.println("AT+INIT");           // Init.
+    delayAndRead();  
+}
+
+String send="";
+void message()                             //function to show the start of every scan
+{
+  send="BLE Address-[";
+}
+
+void setup()                                //Initial setup
+{  
+  Serial.begin(9600);                       //Initialisation of serial monitor                   
+  BTserial.begin(38400);                    //HC-05's default serial speed for AT mode
+  delay(1000);                              //Hardware initialisation delay
+  scandevice();                             //function to set ble for enq
+  message();                                //Start enq
+  BTserial.println("AT+INQ");
+
+}
+
+int index=0;
+char memory[100];
+char sub[50];
+int total=0;
+int index2;
+bool capture;
+
+void loop()                                 //loop that runs to scan b/w time interval 
+{
+  if(BTserial.available())                  //Checks any input from HC-05
+  {
+   c=BTserial.read();                       //Reads data from HC-05 using RX&TX       
+   memory[index]=c;                          //Stores data(ble address) in memory
+   index++;                                 //serial data is transferred bit by bit
+
+     //This part comes into effect only when the line ends
+     if(c=='\n')                           //When the string encounters newline character
+       {
+        memory[index-1]=0;                  //remove the line-end character(\n)
+        index=0;                           //reset index to get new address of BLE
+
+       //This part is executed when no device is scanned
+       if(memory[0]=='O' && memory[1]=='K')
+         { 
+          send=send+"]";                   //completes the message
+           if(total>0)                     //When scan device count is > 0
+             { 
+              Serial.println(send);        //Prints the variable stored in 'send' into serial monitor
+             }
+            BTserial.println("AT+INQ");    //Restart Scan for BLE device for next time interval
+            total=0;                       //set no. of device = 0
+            message();
+       }
+       else
+       { 
+         capture =false;
+         index2=0;
+         for(index=0;index<30;index++)
+            {
+              if(!capture)
+                 {
+                  if(memory[index]==':')
+                    {capture=true;}
+                  }
+               else
+               {
+                sub[index2]=memory[index];
+                if(memory[index]==',')
+                  {sub[index2]=0;
+                   break;}
+                }
+                index2++;
+             }
+             index=0;
+             String str((char*)sub);
+
+             if(send.indexOf(str)<=0)
+             {
+              if(total>0){
+                 {send=send+",";}
+                  send+="\"";
+                  send +=str;
+                  send+="\"";
+                  total++;                 
+              }}}}}}
